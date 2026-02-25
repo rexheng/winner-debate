@@ -222,7 +222,7 @@ export default function App() {
       const res1 = await fetch('/api/engine/run?phase=init_and_pro', { method: 'POST' });
       const data1 = await res1.json();
       if (!data1.success) throw new Error(data1.error);
-      const roundId = data1.roundId;
+      const { roundId, topic, pro_model, anti_model, proContent } = data1;
 
       await new Promise(r => setTimeout(r, 2000));
 
@@ -230,10 +230,11 @@ export default function App() {
       const res2 = await fetch('/api/engine/run?phase=generate_anti', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roundId })
+        body: JSON.stringify({ roundId, topic, anti_model })
       });
       const data2 = await res2.json();
       if (!data2.success) throw new Error(data2.error);
+      const { antiContent } = data2;
 
       await new Promise(r => setTimeout(r, 2000));
 
@@ -241,7 +242,7 @@ export default function App() {
       const res3 = await fetch('/api/engine/run?phase=vote_1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roundId })
+        body: JSON.stringify({ roundId, topic, pro_model, anti_model, proContent, antiContent })
       });
       const data3 = await res3.json();
       if (!data3.success) throw new Error(data3.error);
@@ -252,7 +253,7 @@ export default function App() {
       const res4 = await fetch('/api/engine/run?phase=vote_2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roundId })
+        body: JSON.stringify({ roundId, topic, pro_model, anti_model, proContent, antiContent, excludeVoter: data3.voter })
       });
       const data4 = await res4.json();
       if (!data4.success) throw new Error(data4.error);

@@ -26,10 +26,7 @@ Analyze the following political topic: {topic}
 Argue strongly for the {side} side. You MUST "steelman" your position by providing the most intellectually serious, logically rigorous, and charitable defense of this perspective possible, regardless of public consensus. Output ONLY your argument—no introductory remarks, no meta-commentary, just the substantive debate text. Keep it to one clear, concise paragraph.
 `;
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 export async function callGenerateArgument(modelId: string, topic: string, side: 'PRO' | 'ANTI'): Promise<string> {
-  await delay(2000); // 2 second delay to prevent rate limits
   try {
     const prompt = PROMPT_TEMPLATE.replace('{topic}', topic).replace('{side}', side);
 
@@ -46,7 +43,6 @@ export async function callGenerateArgument(modelId: string, topic: string, side:
 }
 
 export async function callVote(voterId: string, topic: string, proArg: string, antiArg: string): Promise<'PRO' | 'ANTI'> {
-  await delay(2000); // 2 second delay to prevent rate limits
   try {
     const { text } = await generateText({
       model: openrouter.chat(voterId),

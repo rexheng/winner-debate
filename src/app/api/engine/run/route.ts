@@ -77,47 +77,43 @@ export async function POST(req: Request) {
       const proContent = await callGenerateArgument(proModel.id, topic, 'PRO');
       db.prepare(`INSERT INTO arguments (round_id, model, side, content) VALUES (?, ?, ?, ?)`).run(roundId, proModel.name, 'PRO', proContent);
       
-      // We need to return the shuffled voters so the frontend can pass them to voting phases
-      // Actually, better: we just dynamically pick 2 unused models during voting phases
-      return NextResponse.json({ success: true, roundId });
+      return NextResponse.json({ success: true, roundId, topic, pro_model: proModel.name, anti_model: antiModel.name, proContent });
     }
 
-    // require roundId for subsequent phases
+    // require roundId + context for subsequent phases
     const body = await req.json().catch(() => ({}));
     const roundId = body.roundId;
     if (!roundId) throw new Error("Missing roundId");
 
-    const round = db.prepare(`SELECT * FROM rounds WHERE id = ?`).get(roundId) as any;
-    if (!round) throw new Error("Round not found");
-
     if (phase === 'generate_anti') {
-      const antiModelDef = MODELS.find(m => m.name === round.anti_model);
+      const { topic, anti_model } = body;
+      if (!topic || !anti_model) throw new Error("Missing topic or anti_model");
+
+      const antiModelDef = MODELS.find(m => m.name === anti_model);
       if (!antiModelDef) throw new Error("Anti model not found");
-      
-      const antiContent = await callGenerateArgument(antiModelDef.id, round.topic, 'ANTI');
-      db.prepare(`INSERT INTO arguments (round_id, model, side, content) VALUES (?, ?, ?, ?)`).run(roundId, round.anti_model, 'ANTI', antiContent);
+
+      const antiContent = await callGenerateArgument(antiModelDef.id, topic, 'ANTI');
+      db.prepare(`INSERT INTO arguments (round_id, model, side, content) VALUES (?, ?, ?, ?)`).run(roundId, anti_model, 'ANTI', antiContent);
 
       db.prepare(`UPDATE rounds SET status = 'voting' WHERE id = ?`).run(roundId);
-      return NextResponse.json({ success: true, roundId });
+      return NextResponse.json({ success: true, roundId, antiContent });
     }
 
     if (phase === 'vote_1' || phase === 'vote_2') {
-      const args = db.prepare(`SELECT * FROM arguments WHERE round_id = ?`).all(roundId) as any[];
-      const proArg = args.find(a => a.side === 'PRO')?.content || "";
-      const antiArg = args.find(a => a.side === 'ANTI')?.content || "";
+      const { topic, pro_model, anti_model, proContent, antiContent, excludeVoter } = body;
+      if (!topic || !pro_model || !anti_model || !proContent || !antiContent) throw new Error("Missing context for voting");
 
-      // Find available voters (models neither PRO nor ANTI, and haven't voted yet)
-      const existingVotes = db.prepare(`SELECT voter_model FROM votes WHERE round_id = ?`).all(roundId) as any[];
-      const usedModels = [round.pro_model, round.anti_model, ...existingVotes.map(v => v.voter_model)];
-      
+      const usedModels = [pro_model, anti_model];
+      if (excludeVoter) usedModels.push(excludeVoter);
+
       const availableVoters = MODELS.filter(m => !usedModels.includes(m.name));
       if (availableVoters.length === 0) throw new Error("No voters available");
-      
+
       const voter = availableVoters[Math.floor(Math.random() * availableVoters.length)];
-      
-      const verdict = await callVote(voter.id, round.topic, proArg, antiArg);
+
+      const verdict = await callVote(voter.id, topic, proContent, antiContent);
       db.prepare(`INSERT INTO votes (round_id, voter_model, voted_for) VALUES (?, ?, ?)`).run(roundId, voter.name, verdict);
-      
+
       if (phase === 'vote_2') {
          db.prepare(`UPDATE rounds SET status = 'completed' WHERE id = ?`).run(roundId);
          enforceHistoryLimit();
